@@ -110,7 +110,7 @@ const MAX_ANNOS = 8
 
 let functions: FunctionLayer[] = [
   {
-    enabled: true,
+    enabled: false,
     label: "f₁",
     expr: "y = 2x + 3",
     color: "#000000",
@@ -124,26 +124,12 @@ let functions: FunctionLayer[] = [
     rightEndpoint: "closed",
     endpointRadius: 6,
   },
-  {
-    enabled: true,
-    label: "f₂",
-    expr: "y = x^2 - 4",
-    color: "#000000",
-    width: 2.5,
-    samplesPerPixel: 1.5,
-    restrictDomain: false,
-    domainMin: -10,
-    domainMax: 10,
-    showEndpoints: true,
-    leftEndpoint: "open",
-    rightEndpoint: "open",
-    endpointRadius: 6,
-  },
+
 ];
 
 let pointSets: PointSet[] = [
   {
-    enabled: true,
+    enabled: false,
     label: "Points A",
     pointsText: `(-6, 2)
 (-2, 5)
@@ -170,16 +156,7 @@ let segmentSets: SegmentSet[] = [
 ];
 
 let annotations: Annotation[] = [
-  {
-    id: "a1",
-    text: "Label",
-    x: 0,
-    y: 0,
-    color: "#000000",
-    fontSize: 18,
-    bold: true,
-    clipToPlot: true,
-  },
+  
 ];
 
 // =====================
