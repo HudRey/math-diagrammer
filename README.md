@@ -1,16 +1,38 @@
-# React + Vite
+# Math Diagrammer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Generate editable, mathematically accurate geometry diagrams from plain-English prompts.
 
-Currently, two official plugins are available:
+**Live app:** https://math-diagrammer-luaf.vercel.app *(password protected)*
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+![Issoceles Triangles example](docs/Issoc.%20Triangles.png)
+## The problem
 
-## React Compiler
+I teach 8th grade Pre-Algebra. Making a clean diagram for a worksheet or assessment — similar triangles with correct proportions, angle marks, congruence ticks — takes 10+ minutes each in GeoGebra or Google Drawings. I needed dozens of them per unit.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+This tool does it in about 10 seconds: describe the diagram, get an accurate figure, drag anything that needs adjusting, download a PNG for the worksheet.
 
-## Expanding the ESLint configuration
+## What it does
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Prompt to diagram** — "two similar triangles ABC and DEF, scale factor 2, equal angles marked" produces a correct figure: exact scale factor, matching arc counts on corresponding angles, matching tick marks on congruent sides
+- **Fully editable** — click any shape, mark, or label to drag it, recolor it, relabel it, or delete it
+- **Iterate by prompt** — "make DEF twice as big" modifies the existing diagram instead of starting over
+- **Export** — PNG (2x resolution) or SVG, ready for worksheets and slides
+
+## How it works
+
+The frontend is a React app that draws shapes as SVG on a canvas and lets you drag and edit them. When you hit Generate, it sends your prompt plus a detailed system prompt (instructions and a JSON format spec) to a serverless function. That function runs on Vercel, holds the API key secretly, and forwards the request to Claude (Anthropic's AI model). Claude returns the diagram as JSON coordinates — numbers describing where every point goes — and the frontend draws them. The password check and API key live server-side so neither can be pulled out of the webpage.
+
+## Stack
+
+- React + Vite
+- Vercel (hosting + serverless functions)
+- Anthropic API (Claude Sonnet)
+
+## Built with AI-assisted development
+
+I designed this tool around my curriculum needs and built it by directing Claude through the code, then handled the deployment myself: GitHub, Vercel configuration, environment variables, and debugging build and runtime errors until it shipped.
+
+## What I'd add next
+
+- Coordinate plane mode (axes, plotted points) for transformation and slope units
+- Saved diagram library so figures persist between sessions
