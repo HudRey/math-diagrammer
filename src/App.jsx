@@ -14,6 +14,10 @@ Schema:
     {"id":"s2","type":"segment","points":[{"x":100,"y":100},{"x":300,"y":200}],"vertexLabels":["P","Q"],"stroke":"#1F2937","fill":"none","strokeWidth":2.5},
     {"id":"s3","type":"circle","cx":400,"cy":300,"r":90,"label":"O","stroke":"#1F2937","fill":"none","strokeWidth":2.5}
   ],
+  "marks": [
+    {"id":"m1","type":"angle","vertex":{"x":120,"y":460},"arm1":{"x":360,"y":460},"arm2":{"x":240,"y":220},"arcs":1,"right":false,"label":"","color":"#1F2937"},
+    {"id":"m2","type":"ticks","from":{"x":120,"y":460},"to":{"x":360,"y":460},"count":1,"color":"#1F2937"}
+  ],
   "annotations": [
     {"id":"a1","x":400,"y":60,"text":"△ABC ~ △DEF","color":"#1F2937","fontSize":20}
   ]
@@ -24,14 +28,17 @@ Hard rules:
 - Keep everything inside x:60–740, y:60–540. Space multiple figures apart so labels don't collide.
 - Corresponding vertices of similar/congruent figures should be in corresponding positions/orientations unless the user asks otherwise.
 - vertexLabels order matches points order. sideLabels[i] labels the side from points[i] to points[i+1] (wrapping); use "" for unlabeled sides. Use sideLabels for given side lengths (e.g. "6", "9", "x").
-- Default stroke "#1F2937", fill "none", strokeWidth 2.5. If multiple figures, give each a different stroke from: #2563EB, #DC2626, #059669, #D97706, #7C3AED — unless the user specifies colors.
+- ANGLE MARKS: use type "angle" marks to show angles. vertex is the exact vertex coordinate; arm1 and arm2 are points along the two rays forming the angle (adjacent vertices work). Equal angles get the same arcs count (1, 2, or 3). Right angles: set "right":true (draws a square) and do NOT also write 90°. Use "label" for angle names/measures like "1", "x", "35°".
+- TICK MARKS: use type "ticks" to show congruent sides. from/to must exactly match the side's endpoints. Congruent sides get the same count (1, 2, or 3).
+- In similar/congruent figures, mark corresponding equal angles with matching arc counts and congruent sides with matching tick counts. For angle-relationship diagrams (transversals, vertical angles), place angle marks at the intersections with labels.
+- Default stroke "#1F2937", fill "none", strokeWidth 2.5. If multiple figures, give each a different stroke from: #2563EB, #DC2626, #059669, #D97706, #7C3AED — unless the user specifies colors. Marks default to the color of their figure.
 - Use annotations sparingly for titles, similarity statements, or measurements that aren't side labels.
 - If the user message includes a "Current diagram" JSON and the request is a modification, return the FULL updated JSON. If it's clearly a new diagram request, return a fresh diagram.`;
 
 const EXAMPLES = [
-  "Two similar triangles ABC and DEF, scale factor 2, with side lengths labeled",
+  "Two similar triangles ABC and DEF, scale factor 2, with equal angles marked",
   "A right triangle with legs 6 and 8, hypotenuse labeled x",
-  "A circle with center O, radius r, and an inscribed triangle",
+  "An isosceles triangle with congruent sides tick-marked and base angles marked",
   "Parallel lines cut by a transversal, angles labeled 1–8",
 ];
 
@@ -49,7 +56,7 @@ const uid = () => "id" + Math.random().toString(36).slice(2, 9);
 
 // ---------- normalization ----------
 function normalizeScene(raw) {
-  const scene = { shapes: [], annotations: [] };
+  const scene = { shapes: [], marks: [], annotations: [] };
   (raw.shapes || []).forEach((s) => {
     const base = {
       id: s.id || uid(),
@@ -69,6 +76,28 @@ function normalizeScene(raw) {
       });
     }
   });
+  (raw.marks || []).forEach((m) => {
+    if (m.type === "angle" && m.vertex && m.arm1 && m.arm2) {
+      scene.marks.push({
+        id: m.id || uid(), type: "angle",
+        vertex: { x: +m.vertex.x, y: +m.vertex.y },
+        arm1: { x: +m.arm1.x, y: +m.arm1.y },
+        arm2: { x: +m.arm2.x, y: +m.arm2.y },
+        arcs: Math.min(3, Math.max(1, Math.round(+m.arcs) || 1)),
+        right: !!m.right,
+        label: m.label ? String(m.label) : "",
+        color: m.color || "#1F2937",
+      });
+    } else if (m.type === "ticks" && m.from && m.to) {
+      scene.marks.push({
+        id: m.id || uid(), type: "ticks",
+        from: { x: +m.from.x, y: +m.from.y },
+        to: { x: +m.to.x, y: +m.to.y },
+        count: Math.min(3, Math.max(1, Math.round(+m.count) || 1)),
+        color: m.color || "#1F2937",
+      });
+    }
+  });
   (raw.annotations || []).forEach((a) => {
     scene.annotations.push({
       id: a.id || uid(),
@@ -82,9 +111,11 @@ function normalizeScene(raw) {
   return scene;
 }
 
+const EMPTY_SCENE = { shapes: [], marks: [], annotations: [] };
+
 // ---------- component ----------
 export default function MathDiagrammer() {
-  const [scene, setScene] = useState({ shapes: [], annotations: [] });
+  const [scene, setScene] = useState(EMPTY_SCENE);
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -142,6 +173,18 @@ export default function MathDiagrammer() {
       } else if (d.kind === "radius") {
         const s = next.shapes.find((s) => s.id === d.id);
         s.r = Math.max(10, Math.hypot(now.x - s.cx, now.y - s.cy));
+      } else if (d.kind === "mark") {
+        const m = (next.marks || []).find((m) => m.id === d.id);
+        if (m) {
+          if (m.type === "angle") {
+            m.vertex.x += dx; m.vertex.y += dy;
+            m.arm1.x += dx; m.arm1.y += dy;
+            m.arm2.x += dx; m.arm2.y += dy;
+          } else {
+            m.from.x += dx; m.from.y += dy;
+            m.to.x += dx; m.to.y += dy;
+          }
+        }
       } else if (d.kind === "annotation") {
         const a = next.annotations.find((a) => a.id === d.id);
         a.x += dx; a.y += dy;
@@ -173,15 +216,18 @@ export default function MathDiagrammer() {
   const mutate = (fn) => {
     pushHistory(sceneRef.current);
     const next = JSON.parse(JSON.stringify(sceneRef.current));
+    if (!next.marks) next.marks = [];
     fn(next);
     setScene(next);
   };
   const selectedShape = scene.shapes.find((s) => s.id === selectedId);
+  const selectedMark = (scene.marks || []).find((m) => m.id === selectedId);
   const selectedAnno = scene.annotations.find((a) => a.id === selectedId);
 
   const deleteSelected = () => {
     mutate((s) => {
       s.shapes = s.shapes.filter((x) => x.id !== selectedId);
+      s.marks = (s.marks || []).filter((x) => x.id !== selectedId);
       s.annotations = s.annotations.filter((x) => x.id !== selectedId);
     });
     setSelectedId(null);
@@ -198,18 +244,18 @@ export default function MathDiagrammer() {
     setLoading(true); setError(null);
     try {
       let userMsg = prompt.trim();
-      if (sceneRef.current.shapes.length || sceneRef.current.annotations.length) {
-        userMsg = `Current diagram: ${JSON.stringify(sceneRef.current)}\n\nRequest: ${prompt.trim()}`;
+      const cur = sceneRef.current;
+      if (cur.shapes.length || (cur.marks || []).length || cur.annotations.length) {
+        userMsg = `Current diagram: ${JSON.stringify(cur)}\n\nRequest: ${prompt.trim()}`;
       }
-     const response = await fetch("/api/generate", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: userMsg }],
-  }),
-});
-
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userMsg }],
+        }),
+      });
       const data = await response.json();
       const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
       const jsonStr = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
@@ -299,7 +345,55 @@ export default function MathDiagrammer() {
     return <g key={s.id}>{els}</g>;
   };
 
-  const Swatches = ({ colors, value, onPick, allowNone }) => (
+  const renderMark = (m) => {
+    const sel = m.id === selectedId;
+    const els = [];
+    if (m.type === "angle") {
+      const a1 = Math.atan2(m.arm1.y - m.vertex.y, m.arm1.x - m.vertex.x);
+      const a2 = Math.atan2(m.arm2.y - m.vertex.y, m.arm2.x - m.vertex.x);
+      let d = a2 - a1;
+      while (d > Math.PI) d -= 2 * Math.PI;
+      while (d < -Math.PI) d += 2 * Math.PI;
+      const sweep = d > 0 ? 1 : 0;
+      if (m.right) {
+        const sz = 13;
+        const p1 = { x: m.vertex.x + Math.cos(a1) * sz, y: m.vertex.y + Math.sin(a1) * sz };
+        const p2 = { x: m.vertex.x + Math.cos(a2) * sz, y: m.vertex.y + Math.sin(a2) * sz };
+        const pc = { x: p1.x + Math.cos(a2) * sz, y: p1.y + Math.sin(a2) * sz };
+        els.push(<path key="sq" d={`M ${p1.x} ${p1.y} L ${pc.x} ${pc.y} L ${p2.x} ${p2.y}`} fill="none" stroke={m.color} strokeWidth="1.8" pointerEvents="none" />);
+      } else {
+        for (let k = 0; k < m.arcs; k++) {
+          const r = 20 + k * 6;
+          const p1 = { x: m.vertex.x + Math.cos(a1) * r, y: m.vertex.y + Math.sin(a1) * r };
+          const p2 = { x: m.vertex.x + Math.cos(a1 + d) * r, y: m.vertex.y + Math.sin(a1 + d) * r };
+          els.push(<path key={"arc" + k} d={`M ${p1.x} ${p1.y} A ${r} ${r} 0 0 ${sweep} ${p2.x} ${p2.y}`} fill="none" stroke={m.color} strokeWidth="1.8" pointerEvents="none" />);
+        }
+      }
+      if (m.label) {
+        const mid = a1 + d / 2;
+        const lr = (m.right ? 24 : 20 + (m.arcs - 1) * 6) + 15;
+        els.push(<text key="lbl" x={m.vertex.x + Math.cos(mid) * lr} y={m.vertex.y + Math.sin(mid) * lr} fontSize="16" fontFamily="Georgia, serif" fontStyle="italic" fill={m.color} textAnchor="middle" dominantBaseline="middle" pointerEvents="none">{m.label}</text>);
+      }
+      if (sel) els.push(<circle key="glow" data-ui="1" cx={m.vertex.x} cy={m.vertex.y} r={26} fill="none" stroke="#2563EB" strokeOpacity="0.35" strokeWidth="4" />);
+      els.push(<circle key="hit" data-ui="1" cx={m.vertex.x} cy={m.vertex.y} r={22} fill="transparent" style={{ cursor: "move" }} onPointerDown={(e) => startDrag(e, { kind: "mark", id: m.id })} />);
+    } else {
+      // ticks
+      const mx = (m.from.x + m.to.x) / 2, my = (m.from.y + m.to.y) / 2;
+      const ang = Math.atan2(m.to.y - m.from.y, m.to.x - m.from.x);
+      const dx = Math.cos(ang), dy = Math.sin(ang);
+      const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
+      for (let k = 0; k < m.count; k++) {
+        const off = (k - (m.count - 1) / 2) * 7;
+        const cx = mx + dx * off, cy = my + dy * off;
+        els.push(<line key={"t" + k} x1={cx - px * 6} y1={cy - py * 6} x2={cx + px * 6} y2={cy + py * 6} stroke={m.color} strokeWidth="2" pointerEvents="none" />);
+      }
+      if (sel) els.push(<circle key="glow" data-ui="1" cx={mx} cy={my} r={18} fill="none" stroke="#2563EB" strokeOpacity="0.35" strokeWidth="4" />);
+      els.push(<circle key="hit" data-ui="1" cx={mx} cy={my} r={15} fill="transparent" style={{ cursor: "move" }} onPointerDown={(e) => startDrag(e, { kind: "mark", id: m.id })} />);
+    }
+    return <g key={m.id}>{els}</g>;
+  };
+
+  const Swatches = ({ colors, value, onPick }) => (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
       {colors.map((col) => (
         <button key={col} onClick={() => onPick(col)} title={col}
@@ -318,7 +412,7 @@ export default function MathDiagrammer() {
     fontSize: 13, fontWeight: 600, color: "#1F2937", cursor: "pointer", fontFamily: "inherit",
   };
   const label = { fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#6B7280", marginBottom: 6 };
-  const empty = !scene.shapes.length && !scene.annotations.length;
+  const empty = !scene.shapes.length && !(scene.marks || []).length && !scene.annotations.length;
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#F3F4F6", fontFamily: "'Avenir Next','Segoe UI',system-ui,sans-serif", color: "#111827" }}>
@@ -353,6 +447,7 @@ export default function MathDiagrammer() {
               <rect width={W} height={H} fill="#fff" onPointerDown={() => setSelectedId(null)} />
               {showGrid && <rect width={W} height={H} fill="url(#grid)" pointerEvents="none" />}
               {scene.shapes.map(renderShape)}
+              {(scene.marks || []).map(renderMark)}
               {scene.annotations.map((a) => (
                 <g key={a.id}>
                   {a.id === selectedId && (
@@ -417,6 +512,36 @@ export default function MathDiagrammer() {
             </div>
           )}
 
+          {selectedMark && (
+            <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>Selected {selectedMark.type === "angle" ? "angle mark" : "tick marks"}</div>
+              {selectedMark.type === "angle" && !selectedMark.right && (
+                <div><div style={label}>Arcs — {selectedMark.arcs}</div>
+                  <input type="range" min="1" max="3" step="1" value={selectedMark.arcs} style={{ width: "100%" }}
+                    onChange={(e) => mutate((s) => { s.marks.find((x) => x.id === selectedId).arcs = +e.target.value; })} />
+                </div>
+              )}
+              {selectedMark.type === "angle" && (
+                <div><div style={label}>Label</div>
+                  <input value={selectedMark.label}
+                    onChange={(e) => mutate((s) => { s.marks.find((x) => x.id === selectedId).label = e.target.value; })}
+                    placeholder="1, x, 35°…"
+                    style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #D1D5DB", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
+                </div>
+              )}
+              {selectedMark.type === "ticks" && (
+                <div><div style={label}>Ticks — {selectedMark.count}</div>
+                  <input type="range" min="1" max="3" step="1" value={selectedMark.count} style={{ width: "100%" }}
+                    onChange={(e) => mutate((s) => { s.marks.find((x) => x.id === selectedId).count = +e.target.value; })} />
+                </div>
+              )}
+              <div><div style={label}>Color</div>
+                <Swatches colors={STROKES} value={selectedMark.color} onPick={(col) => mutate((s) => { s.marks.find((x) => x.id === selectedId).color = col; })} />
+              </div>
+              <button onClick={deleteSelected} style={{ ...btn, color: "#DC2626", borderColor: "#FECACA" }}>Delete mark</button>
+            </div>
+          )}
+
           {selectedAnno && (
             <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ fontWeight: 700, fontSize: 14 }}>Selected text</div>
@@ -434,9 +559,9 @@ export default function MathDiagrammer() {
             </div>
           )}
 
-          {!selectedShape && !selectedAnno && !empty && (
+          {!selectedShape && !selectedMark && !selectedAnno && !empty && (
             <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, fontSize: 13, color: "#6B7280" }}>
-              Click any shape or label on the canvas to edit its colors and text.
+              Click any shape, mark, or label on the canvas to edit it.
             </div>
           )}
 
@@ -447,7 +572,7 @@ export default function MathDiagrammer() {
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, cursor: "pointer", padding: "4px 2px" }}>
               <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show grid
             </label>
-            <button onClick={() => { pushHistory(sceneRef.current); setScene({ shapes: [], annotations: [] }); setSelectedId(null); }} style={btn}>Clear canvas</button>
+            <button onClick={() => { pushHistory(sceneRef.current); setScene(EMPTY_SCENE); setSelectedId(null); }} style={btn}>Clear canvas</button>
           </div>
 
           <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>

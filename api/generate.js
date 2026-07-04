@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 1000,
+        max_tokens: 2500,
         system,
         messages,
       }),
@@ -32,4 +32,4 @@ export default async function handler(req, res) {
     console.error(err);
     return res.status(500).json({ error: "Failed to reach Anthropic API" });
   }
-};
+}
