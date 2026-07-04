@@ -242,6 +242,13 @@ export default function MathDiagrammer() {
   async function generate() {
     if (!prompt.trim() || loading) return;
     setLoading(true); setError(null);
+    let pw = localStorage.getItem("md_password");
+      if (!pw) {
+        pw = window.prompt("Enter the access password:");
+        if (!pw) { setLoading(false); return; }
+        localStorage.setItem("md_password", pw);
+      }
+
     try {
       let userMsg = prompt.trim();
       const cur = sceneRef.current;
@@ -250,13 +257,19 @@ export default function MathDiagrammer() {
       }
       const response = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-app-password": pw },
         body: JSON.stringify({
           system: SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMsg }],
         }),
       });
       const data = await response.json();
+       if (response.status === 401) {
+        localStorage.removeItem("md_password");
+        setError("Wrong password — refresh and try again.");
+        setLoading(false);
+        return;
+      }
       const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
       const jsonStr = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
       const parsed = JSON.parse(jsonStr);
