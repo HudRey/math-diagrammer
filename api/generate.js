@@ -3,6 +3,10 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
+if (!process.env.APP_PASSWORD || req.headers["x-app-password"] !== process.env.APP_PASSWORD) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
   const { system, messages } = req.body;
 
   try {
