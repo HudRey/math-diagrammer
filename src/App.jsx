@@ -56,6 +56,32 @@ const away = (p, from, dist) => {
 };
 const uid = () => "id" + Math.random().toString(36).slice(2, 9);
 
+// find all intersection points among segments and polygon edges
+function lineIntersections(shapes) {
+  const segs = [];
+  shapes.forEach((s) => {
+    if (s.type === "segment") segs.push([s.points[0], s.points[1]]);
+    if (s.type === "polygon") {
+      for (let i = 0; i < s.points.length; i++) {
+        segs.push([s.points[i], s.points[(i + 1) % s.points.length]]);
+      }
+    }
+  });
+  const pts = [];
+  for (let i = 0; i < segs.length; i++) {
+    for (let j = i + 1; j < segs.length; j++) {
+      const [p1, p2] = segs[i], [p3, p4] = segs[j];
+      const d = (p2.x - p1.x) * (p4.y - p3.y) - (p2.y - p1.y) * (p4.x - p3.x);
+      if (Math.abs(d) < 1e-9) continue;
+      const t = ((p3.x - p1.x) * (p4.y - p3.y) - (p3.y - p1.y) * (p4.x - p3.x)) / d;
+      const u = ((p3.x - p1.x) * (p2.y - p1.y) - (p3.y - p1.y) * (p2.x - p1.x)) / d;
+      if (t < -0.05 || t > 1.05 || u < -0.05 || u > 1.05) continue;
+      pts.push({ x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) });
+    }
+  }
+  return pts;
+}
+
 // ---------- normalization ----------
 function normalizeScene(raw) {
   const scene = { shapes: [], marks: [], annotations: [] };
@@ -110,6 +136,24 @@ function normalizeScene(raw) {
       fontSize: Number(a.fontSize) || 18,
     });
   });
+
+// snap angle-mark vertices to the nearest true intersection/vertex
+  const inters = lineIntersections(scene.shapes);
+  scene.marks.forEach((m) => {
+    if (m.type !== "angle") return;
+    let best = null, bestD = 40;
+    inters.forEach((p) => {
+      const dist = Math.hypot(p.x - m.vertex.x, p.y - m.vertex.y);
+      if (dist < bestD) { bestD = dist; best = p; }
+    });
+    if (best) {
+      const ddx = best.x - m.vertex.x, ddy = best.y - m.vertex.y;
+      m.vertex.x += ddx; m.vertex.y += ddy;
+      m.arm1.x += ddx; m.arm1.y += ddy;
+      m.arm2.x += ddx; m.arm2.y += ddy;
+    }
+  });
+  
   return scene;
 }
 
