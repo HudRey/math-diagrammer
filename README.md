@@ -5,6 +5,8 @@ Generate editable, mathematically accurate geometry diagrams from plain-English 
 **Live app:** https://math-diagrammer-luaf.vercel.app *(password protected)*
 
 ![Issoceles Triangles example](docs/Issoc.%20Triangles.png)
+![Labeled Transversal Angles example](docs/Transveral%20Angles%20with%20Labels.png)
+
 ## The problem
 
 I teach 8th grade Pre-Algebra. Making a clean diagram for a worksheet or assessment — similar triangles with correct proportions, angle marks, congruence ticks — takes 10+ minutes each in GeoGebra or Google Drawings. I needed dozens of them per unit.
