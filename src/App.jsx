@@ -16,7 +16,8 @@ Schema:
   ],
   "marks": [
     {"id":"m1","type":"angle","vertex":{"x":120,"y":460},"arm1":{"x":360,"y":460},"arm2":{"x":240,"y":220},"arcs":1,"right":false,"label":"","color":"#1F2937"},
-    {"id":"m2","type":"ticks","from":{"x":120,"y":460},"to":{"x":360,"y":460},"count":1,"color":"#1F2937"}
+    {"id":"m2","type":"ticks","from":{"x":120,"y":460},"to":{"x":360,"y":460},"count":1,"color":"#1F2937"},
+    {"id":"m3","type":"parallel","from":{"x":100,"y":150},"to":{"x":700,"y":150},"count":1,"color":"#1F2937"}
   ],
   "annotations": [
     {"id":"a1","x":400,"y":60,"text":"△ABC ~ △DEF","color":"#1F2937","fontSize":20}
@@ -24,14 +25,15 @@ Schema:
 }
 
 Hard rules:
-- Mathematical correctness is the top priority. Similar figures must use an exact scale factor with equal corresponding angles. Right angles must be exactly 90°. Congruent figures must be congruent. Compute coordinates precisely (decimals allowed). Remember screen y increases DOWNWARD.
+- Mathematical correctness is the top priority. Similar figures must use an exact scale factor with equal corresponding angles. Right angles must be exactly 90°. Congruent figures must be congruent. Squares and regular polygons must have exactly equal side lengths — verify with the distance formula. Inscribed and tangent figures must be exactly tangent: compute the radius from the enclosing figure's dimensions. Compute coordinates precisely (decimals allowed). Remember screen y increases DOWNWARD.
 - Keep everything inside x:60–740, y:60–540. Space multiple figures apart so labels don't collide.
 - Corresponding vertices of similar/congruent figures should be in corresponding positions/orientations unless the user asks otherwise.
 - vertexLabels order matches points order. sideLabels[i] labels the side from points[i] to points[i+1] (wrapping); use "" for unlabeled sides. Use sideLabels for given side lengths (e.g. "6", "9", "x").
-- ANGLE MARKS: use type "angle" marks to show angles. vertex is the exact vertex coordinate; arm1 and arm2 are points along the two rays forming the angle (adjacent vertices work). Equal angles get the same arcs count (1, 2, or 3). Right angles: set "right":true (draws a square) and do NOT also write 90°. Use "label" for angle names/measures like "1", "x", "35°".
-- TICK MARKS: use type "ticks" to show congruent sides. from/to must exactly match the side's endpoints. Congruent sides get the same count (1, 2, or 3).
+- ANGLE MARKS: use type "angle" marks to show angles. vertex is the exact vertex coordinate; arm1 and arm2 are points along the two rays forming the angle (adjacent vertices work). When marking angles where two lines or segments cross, you MUST algebraically solve for the exact intersection point and use it as the vertex — never estimate it. Equal angles get the same arcs count (1, 2, or 3). Right angles: set "right":true (draws a square) and do NOT also write 90°. Use "label" for angle names/measures like "1", "x", "35°".
+- TICK MARKS: use type "ticks" ONLY to show congruent (equal-length) sides. from/to must exactly match the side's endpoints. Congruent sides get the same count (1, 2, or 3).
+- PARALLEL MARKS: use type "parallel" to show parallel lines/segments — it draws chevron arrows (>) at the midpoint pointing from "from" toward "to". Parallel lines get the same count (1 or 2); point their chevrons in the same direction. NEVER use ticks to indicate parallel.
 - In similar/congruent figures, mark corresponding equal angles with matching arc counts and congruent sides with matching tick counts. For angle-relationship diagrams (transversals, vertical angles), place angle marks at the intersections with labels.
-- Default stroke "#1F2937", fill "none", strokeWidth 2.5. If multiple figures, give each a different stroke from: #2563EB, #DC2626, #059669, #D97706, #7C3AED — unless the user specifies colors. Marks default to the color of their figure.
+- Default stroke "#1F2937", fill "none", strokeWidth 2.5. If multiple figures, give each a different stroke from: #2563EB, #DC2626, #059669, #D97706, #7C3AED — unless the user specifies colors. Marks must use the same color as the figure they belong to.
 - Use annotations sparingly for titles, similarity statements, or measurements that aren't side labels.
 - If the user message includes a "Current diagram" JSON and the request is a modification, return the FULL updated JSON. If it's clearly a new diagram request, return a fresh diagram.`;
 
@@ -88,9 +90,9 @@ function normalizeScene(raw) {
         label: m.label ? String(m.label) : "",
         color: m.color || "#1F2937",
       });
-    } else if (m.type === "ticks" && m.from && m.to) {
+    } else if ((m.type === "ticks" || m.type === "parallel") && m.from && m.to) {
       scene.marks.push({
-        id: m.id || uid(), type: "ticks",
+        id: m.id || uid(), type: m.type,
         from: { x: +m.from.x, y: +m.from.y },
         to: { x: +m.to.x, y: +m.to.y },
         count: Math.min(3, Math.max(1, Math.round(+m.count) || 1)),
@@ -243,12 +245,11 @@ export default function MathDiagrammer() {
     if (!prompt.trim() || loading) return;
     setLoading(true); setError(null);
     let pw = localStorage.getItem("md_password");
-      if (!pw) {
-        pw = window.prompt("Enter the access password:");
-        if (!pw) { setLoading(false); return; }
-        localStorage.setItem("md_password", pw);
-      }
-
+    if (!pw) {
+      pw = window.prompt("Enter the access password:");
+      if (!pw) { setLoading(false); return; }
+      localStorage.setItem("md_password", pw);
+    }
     try {
       let userMsg = prompt.trim();
       const cur = sceneRef.current;
@@ -264,7 +265,7 @@ export default function MathDiagrammer() {
         }),
       });
       const data = await response.json();
-       if (response.status === 401) {
+      if (response.status === 401) {
         localStorage.removeItem("md_password");
         setError("Wrong password — refresh and try again.");
         setLoading(false);
@@ -388,7 +389,21 @@ export default function MathDiagrammer() {
         els.push(<text key="lbl" x={m.vertex.x + Math.cos(mid) * lr} y={m.vertex.y + Math.sin(mid) * lr} fontSize="16" fontFamily="Georgia, serif" fontStyle="italic" fill={m.color} textAnchor="middle" dominantBaseline="middle" pointerEvents="none">{m.label}</text>);
       }
       if (sel) els.push(<circle key="glow" data-ui="1" cx={m.vertex.x} cy={m.vertex.y} r={26} fill="none" stroke="#2563EB" strokeOpacity="0.35" strokeWidth="4" />);
-      els.push(<circle key="hit" data-ui="1" cx={m.vertex.x} cy={m.vertex.y} r={22} fill="transparent" style={{ cursor: "move" }} onPointerDown={(e) => startDrag(e, { kind: "mark", id: m.id })} />);
+      els.push(<circle key="hit" data-ui="1" cx={m.vertex.x} cy={m.vertex.y} r={m.right ? 26 : 28 + (m.arcs - 1) * 6} fill="transparent" style={{ cursor: "move" }} onPointerDown={(e) => startDrag(e, { kind: "mark", id: m.id })} />);
+    } else if (m.type === "parallel") {
+      // chevron arrows at the midpoint, pointing from -> to
+      const mx = (m.from.x + m.to.x) / 2, my = (m.from.y + m.to.y) / 2;
+      const ang = Math.atan2(m.to.y - m.from.y, m.to.x - m.from.x);
+      const dx = Math.cos(ang), dy = Math.sin(ang);
+      const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
+      for (let k = 0; k < m.count; k++) {
+        const off = (k - (m.count - 1) / 2) * 9;
+        const apexX = mx + dx * (off + 5), apexY = my + dy * (off + 5);
+        const backX = mx + dx * (off - 4), backY = my + dy * (off - 4);
+        els.push(<path key={"ch" + k} d={`M ${backX + px * 6} ${backY + py * 6} L ${apexX} ${apexY} L ${backX - px * 6} ${backY - py * 6}`} fill="none" stroke={m.color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" pointerEvents="none" />);
+      }
+      if (sel) els.push(<circle key="glow" data-ui="1" cx={mx} cy={my} r={18} fill="none" stroke="#2563EB" strokeOpacity="0.35" strokeWidth="4" />);
+      els.push(<circle key="hit" data-ui="1" cx={mx} cy={my} r={15} fill="transparent" style={{ cursor: "move" }} onPointerDown={(e) => startDrag(e, { kind: "mark", id: m.id })} />);
     } else {
       // ticks
       const mx = (m.from.x + m.to.x) / 2, my = (m.from.y + m.to.y) / 2;
@@ -527,7 +542,9 @@ export default function MathDiagrammer() {
 
           {selectedMark && (
             <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>Selected {selectedMark.type === "angle" ? "angle mark" : "tick marks"}</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>
+                Selected {selectedMark.type === "angle" ? "angle mark" : selectedMark.type === "parallel" ? "parallel arrows" : "tick marks"}
+              </div>
               {selectedMark.type === "angle" && !selectedMark.right && (
                 <div><div style={label}>Arcs — {selectedMark.arcs}</div>
                   <input type="range" min="1" max="3" step="1" value={selectedMark.arcs} style={{ width: "100%" }}
@@ -542,8 +559,8 @@ export default function MathDiagrammer() {
                     style={{ width: "100%", padding: "7px 10px", borderRadius: 8, border: "1px solid #D1D5DB", fontSize: 13, fontFamily: "inherit", boxSizing: "border-box" }} />
                 </div>
               )}
-              {selectedMark.type === "ticks" && (
-                <div><div style={label}>Ticks — {selectedMark.count}</div>
+              {(selectedMark.type === "ticks" || selectedMark.type === "parallel") && (
+                <div><div style={label}>{selectedMark.type === "parallel" ? "Arrows" : "Ticks"} — {selectedMark.count}</div>
                   <input type="range" min="1" max="3" step="1" value={selectedMark.count} style={{ width: "100%" }}
                     onChange={(e) => mutate((s) => { s.marks.find((x) => x.id === selectedId).count = +e.target.value; })} />
                 </div>
