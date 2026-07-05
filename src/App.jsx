@@ -35,7 +35,8 @@ Hard rules:
 - In similar/congruent figures, mark corresponding equal angles with matching arc counts and congruent sides with matching tick counts. For angle-relationship diagrams (transversals, vertical angles), place angle marks at the intersections with labels.
 - Default stroke "#1F2937", fill "none", strokeWidth 2.5. If multiple figures, give each a different stroke from: #2563EB, #DC2626, #059669, #D97706, #7C3AED — unless the user specifies colors. Marks must use the same color as the figure they belong to.
 - Use annotations sparingly for titles, similarity statements, or measurements that aren't side labels.
-- If the user message includes a "Current diagram" JSON and the request is a modification, return the FULL updated JSON. If it's clearly a new diagram request, return a fresh diagram.`;
+- If the user message includes a "Current diagram" JSON and the request is a modification, return the FULL updated JSON. If it's clearly a new diagram request, return a fresh diagram.
+- When numbering angles at an intersection 1–4 or 5–8, follow textbook convention: start at the upper-left region and go clockwise.`;
 
 const EXAMPLES = [
   "Two similar triangles ABC and DEF, scale factor 2, with equal angles marked",
