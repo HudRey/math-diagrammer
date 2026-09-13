@@ -215,7 +215,7 @@ function Swatches({ colors, value, onPick }) {
 }
 
 // ==========================================
-// 3. MAIN COMPONENT
+// 3. MAIN APP
 // ==========================================
 export default function App() {
   const [scene, setScene] = useState(EMPTY_SCENE);
@@ -379,7 +379,7 @@ export default function App() {
     setSelectedId(id);
   };
 
-  // Direct Google Gemini API Call (100% Free, Zero Backend Required)
+  // Google Gemini API Direct Integration
   async function generate() {
     if (!prompt.trim() || loading) return;
     setLoading(true);
@@ -402,7 +402,6 @@ export default function App() {
         userMsg = `Current diagram: ${JSON.stringify(cur)}\n\nRequest: ${prompt.trim()}`;
       }
 
-      // Try available free models in order
       const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
       let rawText = null;
       let lastError = null;
@@ -438,9 +437,9 @@ export default function App() {
             break;
           } else if (response.status === 400 || response.status === 403) {
             localStorage.removeItem("gemini_api_key");
-            throw new Error("Invalid Gemini API Key. Please refresh and enter a valid key from aistudio.google.com.");
+            throw new Error("Invalid API Key. Please re-enter a valid key from aistudio.google.com.");
           } else {
-            lastError = data.error?.message || "Model error";
+            lastError = data.error?.message || "Model failed to respond";
           }
         } catch (err) {
           lastError = err.message;
@@ -1097,6 +1096,15 @@ export default function App() {
             <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               <input type="checkbox" checked={showGrid} onChange={(e) => setShowGrid(e.target.checked)} /> Show grid
             </label>
+            <button
+              onClick={() => {
+                localStorage.removeItem("gemini_api_key");
+                alert("API key cleared! Next time you generate, you can enter a new one.");
+              }}
+              style={{ ...btnStyle, fontSize: 12 }}
+            >
+              🔑 Change API Key
+            </button>
             <button onClick={() => { pushHistory(sceneRef.current); setScene(EMPTY_SCENE); setSelectedId(null); }} style={btnStyle}>Clear canvas</button>
           </div>
 
