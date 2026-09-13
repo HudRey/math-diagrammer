@@ -379,7 +379,7 @@ export default function App() {
     setSelectedId(id);
   };
 
-  // Google Gemini API Direct Integration
+// Direct Google Gemini API Call (Supports new AQ. keys)
   async function generate() {
     if (!prompt.trim() || loading) return;
     setLoading(true);
@@ -387,7 +387,7 @@ export default function App() {
 
     let apiKey = localStorage.getItem("gemini_api_key");
     if (!apiKey) {
-      apiKey = window.prompt("Enter your free Google Gemini API Key from aistudio.google.com:");
+      apiKey = window.prompt("Enter your Google Gemini API Key (starts with AQ.):");
       if (!apiKey) {
         setLoading(false);
         return;
@@ -402,53 +402,44 @@ export default function App() {
         userMsg = `Current diagram: ${JSON.stringify(cur)}\n\nRequest: ${prompt.trim()}`;
       }
 
-      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
-      let rawText = null;
-      let lastError = null;
+      // Native Gemini 2.5 Flash Endpoint
+      const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
-      for (const model of models) {
-        try {
-          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-          const response = await fetch(geminiUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: {
-                parts: [{ text: SYSTEM_PROMPT }]
-              },
-              contents: [
-                {
-                  role: "user",
-                  parts: [{ text: userMsg }]
-                }
-              ],
-              generationConfig: {
-                temperature: 0.1,
-                response_mime_type: "application/json"
-              }
-            })
-          });
-
-          const data = await response.json();
-
-          if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
-            rawText = data.candidates[0].content.parts[0].text;
-            break;
-          } else if (response.status === 400 || response.status === 403) {
-            localStorage.removeItem("gemini_api_key");
-            throw new Error("Invalid API Key. Please re-enter a valid key from aistudio.google.com.");
-          } else {
-            lastError = data.error?.message || "Model failed to respond";
+      const response = await fetch(geminiUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey.trim() // Required header for AQ. authorization keys
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: SYSTEM_PROMPT }]
+          },
+          contents: [
+            {
+              role: "user",
+              parts: [{ text: userMsg }]
+            }
+          ],
+          generationConfig: {
+            temperature: 0.1,
+            response_mime_type: "application/json"
           }
-        } catch (err) {
-          lastError = err.message;
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 400 || response.status === 401 || response.status === 403) {
+          localStorage.removeItem("gemini_api_key");
+          throw new Error(data.error?.message || "Invalid API key. Please click 'Change API Key' and re-enter it.");
         }
+        throw new Error(data.error?.message || "Failed to generate diagram.");
       }
 
-      if (!rawText) {
-        throw new Error(lastError || "Could not generate diagram.");
-      }
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (!rawText) throw new Error("No response returned from Gemini.");
 
       const jsonStr = rawText.slice(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
       const parsed = JSON.parse(jsonStr);
