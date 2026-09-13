@@ -379,7 +379,7 @@ export default function App() {
     setSelectedId(id);
   };
 
-  // Safe Teacher-Friendly Generation using Password Protection
+ // Safe Teacher-Friendly Generation
   async function generate() {
     if (!prompt.trim() || loading) return;
     setLoading(true);
@@ -414,7 +414,14 @@ export default function App() {
         })
       });
 
-      const data = await response.json();
+      // Safely read response text first to prevent JSON syntax crash
+      const responseText = await response.text();
+      let data;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        throw new Error(responseText || "Server error occurred");
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
