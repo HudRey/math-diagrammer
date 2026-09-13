@@ -385,7 +385,6 @@ export default function App() {
     setLoading(true);
     setError(null);
 
-    // 1. Check for remembered password on user device
     let password = localStorage.getItem("md_password");
     if (!password) {
       password = window.prompt("Enter the teacher access password:");
@@ -847,7 +846,7 @@ export default function App() {
       const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
       for (let k = 0; k < m.count; k++) {
         const off = (k - (m.count - 1) / 2) * 7;
-        const cx = mx + dx; off cy = my + dy * off;
+        const cx = mx + dx * off, cy = my + dy * off;
         els.push(
           <line
             key={"t" + k}
