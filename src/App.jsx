@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from "react";
 
 // ==========================================
-// 1. CONSTANTS (Top-level)
+// 1. CONSTANTS
 // ==========================================
 const W = 800;
 const H = 600;
@@ -60,7 +60,7 @@ const labelStyle = {
 };
 
 // ==========================================
-// 2. HELPER FUNCTIONS (Top-level)
+// 2. HELPER FUNCTIONS
 // ==========================================
 function centroid(pts) {
   const n = pts.length;
@@ -188,9 +188,6 @@ function normalizeScene(raw) {
   return scene;
 }
 
-// ==========================================
-// 3. SUB-COMPONENTS (Top-level to prevent TDZ)
-// ==========================================
 function Swatches({ colors, value, onPick }) {
   return (
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -218,7 +215,7 @@ function Swatches({ colors, value, onPick }) {
 }
 
 // ==========================================
-// 4. MAIN APP COMPONENT
+// 3. MAIN COMPONENT
 // ==========================================
 export default function App() {
   const [scene, setScene] = useState(EMPTY_SCENE);
@@ -382,10 +379,22 @@ export default function App() {
     setSelectedId(id);
   };
 
+  // Direct Google Gemini API Call (100% Free, Zero Backend Required)
   async function generate() {
     if (!prompt.trim() || loading) return;
     setLoading(true);
     setError(null);
+
+    let apiKey = localStorage.getItem("gemini_api_key");
+    if (!apiKey) {
+      apiKey = window.prompt("Enter your free Google Gemini API Key from aistudio.google.com:");
+      if (!apiKey) {
+        setLoading(false);
+        return;
+      }
+      localStorage.setItem("gemini_api_key", apiKey.trim());
+    }
+
     try {
       let userMsg = prompt.trim();
       const cur = sceneRef.current;
@@ -393,27 +402,64 @@ export default function App() {
         userMsg = `Current diagram: ${JSON.stringify(cur)}\n\nRequest: ${prompt.trim()}`;
       }
 
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMsg }],
-        }),
-      });
+      // Try available free models in order
+      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+      let rawText = null;
+      let lastError = null;
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to generate diagram");
+      for (const model of models) {
+        try {
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-      const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
-      const jsonStr = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+          const response = await fetch(geminiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: SYSTEM_PROMPT }]
+              },
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: userMsg }]
+                }
+              ],
+              generationConfig: {
+                temperature: 0.1,
+                response_mime_type: "application/json"
+              }
+            })
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            rawText = data.candidates[0].content.parts[0].text;
+            break;
+          } else if (response.status === 400 || response.status === 403) {
+            localStorage.removeItem("gemini_api_key");
+            throw new Error("Invalid Gemini API Key. Please refresh and enter a valid key from aistudio.google.com.");
+          } else {
+            lastError = data.error?.message || "Model error";
+          }
+        } catch (err) {
+          lastError = err.message;
+        }
+      }
+
+      if (!rawText) {
+        throw new Error(lastError || "Could not generate diagram.");
+      }
+
+      const jsonStr = rawText.slice(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
       const parsed = JSON.parse(jsonStr);
+
       pushHistory(sceneRef.current);
       setScene(normalizeScene(parsed));
       setSelectedId(null);
     } catch (err) {
       console.error(err);
-      setError("Couldn't generate that one — try rewording or simplifying the prompt.");
+      setError(err.message || "Failed to generate diagram.");
     }
     setLoading(false);
   }
