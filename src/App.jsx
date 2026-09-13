@@ -184,6 +184,27 @@ export default function MathDiagrammer() {
     if (prev) { setScene(prev); setSelectedId(null); }
   };
 
+  const copyToClipboard = async () => {
+  const svgStr = buildSvgString();
+  const img = new Image();
+  img.onload = () => {
+    const c = document.createElement("canvas");
+    c.width = W * 2; // High-res 2x scaling
+    c.height = H * 2;
+    const ctx = c.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, c.width, c.height);
+    ctx.drawImage(img, 0, 0, c.width, c.height);
+    c.toBlob(async (blob) => {
+      if (blob) {
+        await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+        alert("Copied high-res diagram to clipboard! (Ready to paste into Word/Docs)");
+      }
+    });
+  };
+  img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr)));
+};
+
   // ----- coordinate conversion -----
   const toSvg = (e) => {
     const rect = svgRef.current.getBoundingClientRect();
@@ -359,6 +380,23 @@ export default function MathDiagrammer() {
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr)));
   };
 
+  <div style={{ background: "#fff", border: "1px solid #E5E7EB", borderRadius: 12, padding: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+  <div style={label}>Export for Teachers</div>
+  <button 
+    onClick={copyToClipboard} 
+    style={{ ...btn, background: "#2563EB", color: "#fff", border: "none" }} 
+    disabled={empty}
+  >
+    📋 Copy for Word / Docs
+  </button>
+  <button onClick={exportPNG} style={{ ...btn, background: "#111827", color: "#fff", border: "none" }} disabled={empty}>
+    Download PNG
+  </button>
+  <button onClick={exportSVG} style={btn} disabled={empty}>
+    Download SVG
+  </button>
+</div>
+  
   // ----- render helpers -----
   const renderShape = (s) => {
     const sel = s.id === selectedId;
