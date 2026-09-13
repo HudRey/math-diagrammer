@@ -847,7 +847,7 @@ export default function App() {
       const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
       for (let k = 0; k < m.count; k++) {
         const off = (k - (m.count - 1) / 2) * 7;
-        const cx = mx + dx off, cy = my + dy * off;
+        const cx = mx + dx off; cy = my + dy * off;
         els.push(
           <line
             key={"t" + k}
