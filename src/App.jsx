@@ -215,7 +215,7 @@ function Swatches({ colors, value, onPick }) {
 }
 
 // ==========================================
-// 3. MAIN APP
+// 3. MAIN COMPONENT
 // ==========================================
 export default function App() {
   const [scene, setScene] = useState(EMPTY_SCENE);
@@ -379,20 +379,21 @@ export default function App() {
     setSelectedId(id);
   };
 
-// Direct Google Gemini API Call (Supports new AQ. keys)
+  // Safe Teacher-Friendly Generation using Password Protection
   async function generate() {
     if (!prompt.trim() || loading) return;
     setLoading(true);
     setError(null);
 
-    let apiKey = localStorage.getItem("gemini_api_key");
-    if (!apiKey) {
-      apiKey = window.prompt("Enter your Google Gemini API Key (starts with AQ.):");
-      if (!apiKey) {
+    // 1. Check for remembered password on user device
+    let password = localStorage.getItem("md_password");
+    if (!password) {
+      password = window.prompt("Enter the teacher access password:");
+      if (!password) {
         setLoading(false);
         return;
       }
-      localStorage.setItem("gemini_api_key", apiKey.trim());
+      localStorage.setItem("md_password", password.trim());
     }
 
     try {
@@ -402,45 +403,29 @@ export default function App() {
         userMsg = `Current diagram: ${JSON.stringify(cur)}\n\nRequest: ${prompt.trim()}`;
       }
 
-      // Native Gemini 2.5 Flash Endpoint
-      const geminiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
-
-      const response = await fetch(geminiUrl, {
+      const response = await fetch("/api/generate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": apiKey.trim() // Required header for AQ. authorization keys
+          "x-app-password": password
         },
         body: JSON.stringify({
-          system_instruction: {
-            parts: [{ text: SYSTEM_PROMPT }]
-          },
-          contents: [
-            {
-              role: "user",
-              parts: [{ text: userMsg }]
-            }
-          ],
-          generationConfig: {
-            temperature: 0.1,
-            response_mime_type: "application/json"
-          }
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userMsg }]
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        if (response.status === 400 || response.status === 401 || response.status === 403) {
-          localStorage.removeItem("gemini_api_key");
-          throw new Error(data.error?.message || "Invalid API key. Please click 'Change API Key' and re-enter it.");
+        if (response.status === 401) {
+          localStorage.removeItem("md_password");
+          throw new Error("Incorrect password. Please refresh and try again.");
         }
-        throw new Error(data.error?.message || "Failed to generate diagram.");
+        throw new Error(data.error || "Failed to generate diagram.");
       }
 
-      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!rawText) throw new Error("No response returned from Gemini.");
-
+      const rawText = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
       const jsonStr = rawText.slice(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
       const parsed = JSON.parse(jsonStr);
 
@@ -862,7 +847,7 @@ export default function App() {
       const px = Math.cos(ang + Math.PI / 2), py = Math.sin(ang + Math.PI / 2);
       for (let k = 0; k < m.count; k++) {
         const off = (k - (m.count - 1) / 2) * 7;
-        const cx = mx + dx * off, cy = my + dy * off;
+        const cx = mx + dx off, cy = my + dy * off;
         els.push(
           <line
             key={"t" + k}
@@ -1089,12 +1074,12 @@ export default function App() {
             </label>
             <button
               onClick={() => {
-                localStorage.removeItem("gemini_api_key");
-                alert("API key cleared! Next time you generate, you can enter a new one.");
+                localStorage.removeItem("md_password");
+                alert("Session cleared! You will be prompted for the password on next generate.");
               }}
               style={{ ...btnStyle, fontSize: 12 }}
             >
-              🔑 Change API Key
+              🔒 Log out / Change Password
             </button>
             <button onClick={() => { pushHistory(sceneRef.current); setScene(EMPTY_SCENE); setSelectedId(null); }} style={btnStyle}>Clear canvas</button>
           </div>
