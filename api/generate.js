@@ -1,21 +1,18 @@
-// Next.js App Router (app/api/generate/route.js) or Node Serverless Function
-import { NextResponse } from "next/server";
+// api/generate.js (Vercel Serverless Function)
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-export async function POST(req) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return res.status(500).json({ error: "GEMINI_API_KEY is missing in Vercel Environment Variables" });
+  }
+
   try {
-    const { system, messages } = await req.json();
-    const apiKey = process.env.GEMINI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        { error: "GEMINI_API_KEY is not configured" },
-        { status: 500 }
-      );
-    }
-
+    const { system, messages } = req.body;
     const userPrompt = messages[messages.length - 1]?.content || "";
 
-    // Call Google Gemini API (Free tier: gemini-1.5-flash or gemini-2.0-flash)
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
     const response = await fetch(geminiUrl, {
@@ -32,27 +29,25 @@ export async function POST(req) {
           }
         ],
         generationConfig: {
-          temperature: 0.1, // Low temperature for maximum geometric precision
-          response_mime_type: "application/json" // Guarantees pure JSON output
+          temperature: 0.1,
+          response_mime_type: "application/json"
         }
       })
     });
 
+    const data = await response.json();
+
     if (!response.ok) {
-      const errText = await response.text();
-      return NextResponse.json({ error: errText }, { status: response.status });
+      return res.status(response.status).json({ error: data.error?.message || "Gemini API error" });
     }
 
-    const data = await response.json();
     const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
 
-    // Format the response so your existing App.jsx can read it without modification
-    return NextResponse.json({
+    return res.status(200).json({
       content: [{ type: "text", text: rawText }]
     });
 
- } catch (err) {
-      console.error(err);
-      setError(err.message || "Failed to generate diagram");
-    }
+  } catch (err) {
+    return res.status(500).json({ error: err.message });
+  }
 }
