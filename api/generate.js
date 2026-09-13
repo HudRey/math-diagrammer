@@ -1,39 +1,58 @@
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+// Next.js App Router (app/api/generate/route.js) or Node Serverless Function
+import { NextResponse } from "next/server";
 
-if (!process.env.APP_PASSWORD || req.headers["x-app-password"] !== process.env.APP_PASSWORD) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
-
-  const { system, messages } = req.body;
-
+export async function POST(req) {
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 2500,
-        system,
-        messages,
-      }),
-    });
+    const { system, messages } = await req.json();
+    const apiKey = process.env.GEMINI_API_KEY;
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json(data);
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "GEMINI_API_KEY is not configured" },
+        { status: 500 }
+      );
     }
 
-    return res.status(200).json(data);
+    const userPrompt = messages[messages.length - 1]?.content || "";
+
+    // Call Google Gemini API (Free tier: gemini-1.5-flash or gemini-2.0-flash)
+    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+    const response = await fetch(geminiUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: {
+          parts: [{ text: system }]
+        },
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: userPrompt }]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.1, // Low temperature for maximum geometric precision
+          response_mime_type: "application/json" // Guarantees pure JSON output
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      return NextResponse.json({ error: errText }, { status: response.status });
+    }
+
+    const data = await response.json();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+
+    // Format the response so your existing App.jsx can read it without modification
+    return NextResponse.json({
+      content: [{ type: "text", text: rawText }]
+    });
+
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Failed to reach Anthropic API" });
+    console.error("Gemini API Error:", err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
