@@ -51,8 +51,8 @@ export async function POST(req) {
       content: [{ type: "text", text: rawText }]
     });
 
-  } catch (err) {
-    console.error("Gemini API Error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+ } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to generate diagram");
+    }
 }
