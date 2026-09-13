@@ -1,6 +1,5 @@
 // api/generate.js
 export default async function handler(req, res) {
-  // Allow browser requests
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-app-password");
@@ -14,7 +13,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1. Safely parse request body
     let body = req.body;
     if (typeof body === "string") {
       try {
@@ -25,7 +23,6 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    // 2. Password Check
     const clientPassword = req.headers["x-app-password"] || req.headers["X-App-Password"];
     const serverPassword = process.env.APP_PASSWORD;
 
@@ -33,7 +30,6 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: "Incorrect access password." });
     }
 
-    // 3. API Key Check
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: "GEMINI_API_KEY is not set in Vercel Settings -> Environment Variables." });
@@ -47,14 +43,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No prompt text was received." });
     }
 
-    // 4. Try current Gemini models
- const models = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-flash-latest",
-      "gemini-2.5-pro"
-   ];
+    // Modern 3.x series model identifiers
+    const models = [
+      "gemini-3.6-flash",
+      "gemini-3.1-pro-preview"
+    ];
+
     let rawText = null;
     let lastError = null;
 
@@ -99,7 +93,7 @@ export default async function handler(req, res) {
     }
 
     if (!rawText) {
-      return res.status(500).json({ error: lastError || "Failed to generate diagram from Gemini." });
+      return res.status(500).json({ error: lastError || "Failed to generate diagram." });
     }
 
     return res.status(200).json({
