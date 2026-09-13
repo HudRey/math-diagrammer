@@ -1,53 +1,84 @@
-// api/generate.js (Vercel Serverless Function)
-export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+async function generate() {
+    if (!prompt.trim() || loading) return;
+    setLoading(true);
+    setError(null);
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return res.status(500).json({ error: "GEMINI_API_KEY is missing in Vercel Environment Variables" });
-  }
-
-  try {
-    const { system, messages } = req.body;
-    const userPrompt = messages[messages.length - 1]?.content || "";
-
-    const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
-    const response = await fetch(geminiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: system }]
-        },
-        contents: [
-          {
-            role: "user",
-            parts: [{ text: userPrompt }]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.1,
-          response_mime_type: "application/json"
-        }
-      })
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      return res.status(response.status).json({ error: data.error?.message || "Gemini API error" });
+    // 1. Get or prompt for API key
+    let apiKey = localStorage.getItem("gemini_api_key");
+    if (!apiKey) {
+      apiKey = window.prompt("Enter your free Google Gemini API Key from aistudio.google.com:");
+      if (!apiKey) {
+        setLoading(false);
+        return;
+      }
+      localStorage.setItem("gemini_api_key", apiKey.trim());
     }
 
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+    try {
+      let userMsg = prompt.trim();
+      const cur = sceneRef.current;
+      if (cur.shapes.length || (cur.marks || []).length || cur.annotations.length) {
+        userMsg = `Current diagram: ${JSON.stringify(cur)}\n\nRequest: ${prompt.trim()}`;
+      }
 
-    return res.status(200).json({
-      content: [{ type: "text", text: rawText }]
-    });
+      // Try gemini-2.5-flash first, fall back to gemini-2.0-flash if needed
+      const models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-latest"];
+      let rawText = null;
+      let lastError = null;
 
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+      for (const model of models) {
+        try {
+          const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+
+          const response = await fetch(geminiUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: {
+                parts: [{ text: SYSTEM_PROMPT }]
+              },
+              contents: [
+                {
+                  role: "user",
+                  parts: [{ text: userMsg }]
+                }
+              ],
+              generationConfig: {
+                temperature: 0.1,
+                response_mime_type: "application/json"
+              }
+            })
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+            rawText = data.candidates[0].content.parts[0].text;
+            break; // Success!
+          } else if (response.status === 400 || response.status === 403) {
+            localStorage.removeItem("gemini_api_key");
+            throw new Error("Invalid Gemini API Key. Please refresh and enter a valid key from aistudio.google.com.");
+          } else {
+            lastError = data.error?.message || "Model error";
+          }
+        } catch (err) {
+          lastError = err.message;
+        }
+      }
+
+      if (!rawText) {
+        throw new Error(lastError || "Could not generate diagram with available Gemini models.");
+      }
+
+      const jsonStr = rawText.slice(rawText.indexOf("{"), rawText.lastIndexOf("}") + 1);
+      const parsed = JSON.parse(jsonStr);
+
+      pushHistory(sceneRef.current);
+      setScene(normalizeScene(parsed));
+      setSelectedId(null);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to generate diagram.");
+    }
+    setLoading(false);
   }
-}
